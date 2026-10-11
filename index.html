@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Attendance System with QR</title>
+    <!-- Include html5-qrcode and qrious (for generating QR codes) -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+</head>
+<body style="font-family: Arial; text-align: center; margin-top: 20px; background-color: #f4f7f6;">
+    <div style="background: white; padding: 20px; display: inline-block; border-radius: 8px; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); width: 420px;">
+        <h2>Smart Attendance System</h2>
+        
+        <!-- Manual Input Option -->
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="studentInput" placeholder="Enter Student ID / Name" style="width: 70%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;">
+            <button onclick="markManualAttendance()" style="padding: 8px 12px; font-size: 14px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Add
+            </button>
+        </div>
+
+        <!-- Quick QR Generator for Testing -->
+        <div style="background: #e9ecef; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; font-weight: bold; color: #555;">Generate Student QR Code:</p>
+            <input type="text" id="genInput" placeholder="e.g. BE26CS048" style="width: 60%; padding: 6px; font-size: 12px;">
+            <button onclick="generateQR()" style="padding: 6px 10px; font-size: 12px; background: #17a2b8; color: white; border: none; border-radius: 4px; cursor: pointer;">Generate</button>
+            <div style="margin-top: 10px;">
+                <canvas id="qrCanvas"></canvas>
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+
+        <!-- QR Code Scanner Section -->
+        <h3>Scan QR Code</h3>
+        <div id="reader" style="width: 100%; max-height: 250px;"></div>
+        
+        <p id="result" style="margin-top: 10px; font-weight: bold; min-height: 20px;"></p>
+
+        <h3>Attendance History</h3>
+        <ul id="logList" style="list-style: none; padding: 10px; text-align: left; max-height: 140px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;"></ul>
+
+        <div style="margin-top: 15px; display: flex; justify-content: space-between;">
+            <button onclick="downloadCSV()" style="padding: 8px 12px; font-size: 13px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                📥 Download CSV
+            </button>
+            <button onclick="clearHistory()" style="padding: 8px 12px; font-size: 13px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                🗑️ Clear History
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // QR Code Generator setup
+        var qr = new QRious({
+            element: document.getElementById('qrCanvas'),
+            size: 120,
+            value: 'BE26CS048'
+        });
+
+        function generateQR() {
+            let val = document.getElementById('genInput').value.trim();
+            if (val) {
+                qr.value = val;
+            }
+        }
+
+        function logAttendanceData(studentId) {
+            let timeNow = new Date().toLocaleString();
+            let logs = JSON.parse(localStorage.getItem("attendanceLogs") || "[]");
+            
+            logs.push({ id: studentId, time: timeNow });
+            localStorage.setItem("attendanceLogs", JSON.stringify(logs));
+
+            document.getElementById('result').innerText = `Attendance logged for ${studentId}!`;
+            document.getElementById('result').style.color = '#28a745';
+            loadLogs();
+        }
+
+        function markManualAttendance() {
+            let studentInput = document.getElementById('studentInput').value.trim();
+            if (!studentInput) {
+                document.getElementById('result').innerText = 'Please enter a Student ID or Name!';
+                document.getElementById('result').style.color = '#dc3545';
+                return;
+            }
+            logAttendanceData(studentInput);
+            document.getElementById('studentInput').value = '';
+        }
+
+        function loadLogs() {
+            let logs = JSON.parse(localStorage.getItem("attendanceLogs") || "[]");
+            let listHTML = "";
+            logs.forEach(log => {
+                listHTML += `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">👤 ${log.id} ➔ 🕒 ${log.time}</li>`;
+            });
+            document.getElementById('logList').innerHTML = listHTML || "<li style='color: #888;'>No records yet.</li>";
+        }
+
+        function downloadCSV() {
+            let logs = JSON.parse(localStorage.getItem("attendanceLogs") || "[]");
+            if (logs.length === 0) {
+                alert("No attendance logs to download!");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,Student ID/Name,Timestamp\n";
+            logs.forEach(log => {
+                csvContent += `"${log.id}","${log.time}"\n`;
+            });
+
+            let encodedUri = encodeURI(csvContent);
+            let link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "attendance_report.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function clearHistory() {
+            if (confirm("Are you sure you want to clear all logs?")) {
+                localStorage.removeItem("attendanceLogs");
+                document.getElementById('result').innerText = 'History cleared!';
+                document.getElementById('result').style.color = '#dc3545';
+                loadLogs();
+            }
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            logAttendanceData(decodedText);
+        }
+
+        let html5QrCode = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: 200 }, false);
+        html5QrCode.render(onScanSuccess);
+
+        loadLogs();
+    </script>
+</body>
+</html>
